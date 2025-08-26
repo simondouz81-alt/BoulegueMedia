@@ -6,7 +6,6 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { Icon, DivIcon } from 'leaflet';
 import { Calendar, MapPin, Euro, ExternalLink, Clock, User, Mail } from 'lucide-react';
 import { Event } from '@/types/event';
-import 'leaflet/dist/leaflet.css';
 
 // Fix pour les icônes Leaflet avec Next.js
 delete (Icon.Default.prototype as any)._getIconUrl;
