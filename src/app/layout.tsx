@@ -4,7 +4,6 @@ import { Inter } from 'next/font/google';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { AuthProvider } from '@/hooks/useAuth';
-import 'leaflet/dist/leaflet.css';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -59,6 +58,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
+      <head>
+        {/* ✅ CDN Leaflet CSS */}
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossOrigin=""
+        />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           <div className="min-h-screen flex flex-col">
