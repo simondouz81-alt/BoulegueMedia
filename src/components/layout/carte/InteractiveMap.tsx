@@ -1,10 +1,10 @@
 // src/components/layout/carte/InteractiveMap.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { Icon, DivIcon } from 'leaflet';
-import { Calendar, MapPin, Euro, ExternalLink } from 'lucide-react';
+import { Calendar, MapPin, Euro } from 'lucide-react';
 import { Event } from '@/types/event';
 
 // Fix pour les icônes Leaflet avec Next.js
@@ -75,13 +75,8 @@ export default function InteractiveMap({
   selectedLocation, 
   onEventSelect 
 }: InteractiveMapProps) {
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>(events);
-
-  // Position centrée sur l'Occitanie
-  const defaultCenter: [number, number] = [43.6047, 1.4442]; // Toulouse
-  const defaultZoom = 8;
-
-  useEffect(() => {
+  // CORRECTION: Utiliser useMemo au lieu de useState + useEffect pour éviter la boucle infinie
+  const filteredEvents = useMemo(() => {
     let filtered = events;
 
     if (selectedCategory && selectedCategory !== 'all') {
@@ -94,23 +89,35 @@ export default function InteractiveMap({
       );
     }
 
-    setFilteredEvents(filtered);
-  }, [events, selectedCategory, selectedLocation]);
+    return filtered;
+  }, [events, selectedCategory, selectedLocation]); // Dépendances claires
+
+  // Position centrée sur l'Occitanie
+  const defaultCenter: [number, number] = [43.6047, 1.4442]; // Toulouse
+  const defaultZoom = 8;
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    } catch {
+      return 'Date invalide';
+    }
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    try {
+      return new Date(dateString).toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -137,6 +144,11 @@ export default function InteractiveMap({
     return labels[category as keyof typeof labels] || 'Autre';
   };
 
+  // Debug: Log si on a des événements
+  useEffect(() => {
+    console.log(`InteractiveMap: ${filteredEvents.length} événements filtrés`);
+  }, [filteredEvents.length]);
+
   return (
     <div className="h-full w-full relative">
       <MapContainer
@@ -151,104 +163,115 @@ export default function InteractiveMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
-        {filteredEvents.map((event) => (
-          <Marker
-            key={event.id}
-            position={[event.latitude, event.longitude]}
-            icon={categoryIcons[event.category] || categoryIcons.autre}
-            eventHandlers={{
-              click: () => {
-                onEventSelect?.(event);
-              },
-            }}
-          >
-            <Popup 
-              className="custom-leaflet-popup" 
-              maxWidth={320}
-              minWidth={280}
-              closeButton={true}
-              autoClose={false}
-              closeOnClick={false}
-            >
-              <div className="p-2">
-                {/* Image de l'événement */}
-                {event.image_url && (
-                  <div className="mb-3">
-                    <img
-                      src={event.image_url}
-                      alt={event.title}
-                      className="w-full h-28 object-cover rounded-lg"
-                    />
-                  </div>
-                )}
+        {filteredEvents.map((event, index) => {
+          // Validation supplémentaire pour éviter les erreurs
+          if (!event.latitude || !event.longitude || isNaN(event.latitude) || isNaN(event.longitude)) {
+            return null;
+          }
 
-                {/* Header avec titre et catégorie */}
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-bold text-base text-gray-900 pr-2 flex-1 leading-tight">
-                    {event.title}
-                  </h3>
-                  <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getCategoryColor(event.category)} whitespace-nowrap`}>
-                    {getCategoryLabel(event.category)}
-                  </span>
-                </div>
-                
-                {/* Description courte */}
-                <p className="text-gray-600 text-sm mb-3 leading-relaxed line-clamp-2">
-                  {event.description}
-                </p>
-                
-                {/* Informations essentielles */}
-                <div className="space-y-2 text-sm mb-3">
-                  {/* Date */}
-                  <div className="flex items-center text-gray-700">
-                    <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="font-medium text-xs">
-                      {formatDate(event.start_date)} à {formatTime(event.start_date)}
+          return (
+            <Marker
+              key={`marker-${event.id || index}-${index}`} // Clé plus robuste
+              position={[event.latitude, event.longitude]}
+              icon={categoryIcons[event.category] || categoryIcons.autre}
+              eventHandlers={{
+                click: () => {
+                  onEventSelect?.(event);
+                },
+              }}
+            >
+              <Popup 
+                className="custom-leaflet-popup" 
+                maxWidth={320}
+                minWidth={280}
+                closeButton={true}
+                autoClose={false}
+                closeOnClick={false}
+              >
+                <div className="p-2">
+                  {/* Image de l'événement */}
+                  {event.image_url && (
+                    <div className="mb-3">
+                      <img
+                        src={event.image_url}
+                        alt={event.title}
+                        className="w-full h-28 object-cover rounded-lg"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Header avec titre et catégorie */}
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-bold text-base text-gray-900 pr-2 flex-1 leading-tight">
+                      {event.title}
+                    </h3>
+                    <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${getCategoryColor(event.category)} whitespace-nowrap`}>
+                      {getCategoryLabel(event.category)}
                     </span>
                   </div>
                   
-                  {/* Lieu */}
-                  <div className="flex items-center text-gray-700">
-                    <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="font-medium text-xs">{event.location}</span>
-                  </div>
+                  {/* Description courte */}
+                  <p className="text-gray-600 text-sm mb-3 leading-relaxed line-clamp-2">
+                    {event.description}
+                  </p>
                   
-                  {/* Prix */}
-                  {event.price !== null && event.price !== undefined && (
+                  {/* Informations essentielles */}
+                  <div className="space-y-2 text-sm mb-3">
+                    {/* Date */}
                     <div className="flex items-center text-gray-700">
-                      <Euro className="w-4 h-4 mr-2 flex-shrink-0" />
+                      <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
                       <span className="font-medium text-xs">
-                        {event.price === 0 ? 'Gratuit' : `${event.price}€`}
+                        {formatDate(event.start_date)}
+                        {formatTime(event.start_date) && ` à ${formatTime(event.start_date)}`}
                       </span>
                     </div>
-                  )}
-                </div>
+                    
+                    {/* Lieu */}
+                    <div className="flex items-center text-gray-700">
+                      <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
+                      <span className="font-medium text-xs">{event.location}</span>
+                    </div>
+                    
+                    {/* Prix */}
+                    {event.price !== null && event.price !== undefined && (
+                      <div className="flex items-center text-gray-700">
+                        <Euro className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <span className="font-medium text-xs">
+                          {event.price === 0 ? 'Gratuit' : `${event.price}€`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
-                {/* Actions */}
-                <div className="flex gap-2 pt-2 border-t border-gray-100">
-                  <button
-                    onClick={() => onEventSelect?.(event)}
-                    className="flex-1 bg-orange-600 text-white text-xs font-medium py-2 px-3 rounded-md hover:bg-orange-700 transition-colors"
-                  >
-                    Voir détails
-                  </button>
-                  
-                  {event.website_url && (
-                    <a
-                      href={event.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 border border-gray-300 text-gray-700 text-xs font-medium py-2 px-3 rounded-md hover:bg-gray-50 transition-colors text-center"
-                      onClick={(e) => e.stopPropagation()}
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => onEventSelect?.(event)}
+                      className="flex-1 bg-orange-600 text-white text-xs font-medium py-2 px-3 rounded-md hover:bg-orange-700 transition-colors"
                     >
-                      Site web
-                    </a>
-                  )}
+                      Voir détails
+                    </button>
+                    
+                    {event.website_url && (
+                      <a
+                        href={event.website_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 border border-gray-300 text-gray-700 text-xs font-medium py-2 px-3 rounded-md hover:bg-gray-50 transition-colors text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Site web
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
       
       {/* Légende */}
